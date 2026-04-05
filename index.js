@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { ALL_LEAGUES } from './config.js';
 import { fetchLeague, fetchTeam, fetchPlayers } from './fetch.js';
-import { upsertLeague, upsertTeam, upsertPlayers, upsertPlayersStats, 
+import { upsertLeague, upsertTeam, upsertPlayers, upsertPlayersStats,
          upsertPlayersAttributes, upsertPlayersDetails, logScrapeRun } from './db.js';
 import { computeAttributes, attributeTotals } from './attributes.js';
 import { logger } from './logger.js';
@@ -82,22 +82,116 @@ async function processPlayerDetails(players, fullRun = false) {
   }
 }
 
+async function processTeam(teamId, leagueConfig, existingTeamIds) {
+  let teamData;
+  try {
+    teamData = await fetchTeam(teamId);
+  } catch (err) {
+    logger.error(`Failed to fetch team ${teamId}: ${err.message}`);
+    return { success: false };
+  }
+
+  const record = teamData.Record?.['Regular Season'] ?? {};
+  const wins   = record.Wins ?? 0;
+  const losses = record.Losses ?? 0;
+
+  if (wins === 0 && losses === 0 && !existingTeamIds.has(teamId)) {
+    logger.info(`kipping inactive team ${teamData.Name ?? teamId}`);
+    return { success: true, skipped: true };
+  }
+
+  try {
+    await upsertTeam({
+      id:       teamId,
+      leagueId: leagueConfig.id,
+      name:     teamData.Name,
+      location: teamData.Location,
+      emoji:    teamData.Emoji,
+      color:    teamData.Color,
+      wins,
+      losses,
+    });
+
+    const allPlayersRaw = [
+      ...(Array.isArray(teamData.Players) ? teamData.Players : []),
+      ...(Array.isArray(teamData.Bench?.Batters) ? teamData.Bench.Batters : []),
+      ...(Array.isArray(teamData.Bench?.Pitchers) ? teamData.Bench.Pitchers : []),
+    ];
+
+    const seen = new Set();
+    const allPlayers = allPlayersRaw.filter(p => {
+      if (!p.PlayerID || p.PlayerID === '#') return false;
+      if (seen.has(p.PlayerID)) return false;
+      seen.add(p.PlayerID);
+      return true;
+    });
+
+    const playerRows = allPlayers.map(p => ({
+      id:           p.PlayerID,
+      teamId:       teamId,
+      firstName:    p.FirstName,
+      lastName:     p.LastName,
+      suffix:       p.Suffix,
+      number:       p.Number,
+      position:     p.Position,
+      positionType: p.PositionType,
+      slot:         p.Slot,
+      level:        p.Level,
+    }));
+
+    const statsRows = allPlayers.map(p => ({
+      playerId: p.PlayerID,
+      stats:    p.Stats ?? {},
+    }));
+
+    await upsertPlayers(playerRows);
+    await upsertPlayersStats(statsRows);
+
+    const playerIds = allPlayers.map(p => p.PlayerID);
+    const playerDetails = await fetchPlayers(playerIds);
+    await processPlayerDetails(playerDetails, true);
+
+    logger.info(`Scraped team ${teamData.Name}`);
+    return { success: true };
+  } catch (err) {
+    logger.error(`Failed to process team ${teamId}: ${err.message ?? JSON.stringify(err)}`);
+    return { success: false };
+  }
+}
+
+async function runWithConcurrency(tasks, limit) {
+  let index = 0;
+  let teamsScraped = 0;
+  let errors = 0;
+
+  async function worker() {
+    while (index < tasks.length) {
+      const task = tasks[index++];
+      const result = await task();
+      if (result.success && !result.skipped) teamsScraped++;
+      else if (!result.success) errors++;
+    }
+  }
+
+  await Promise.all(Array.from({ length: limit }, worker));
+  return { teamsScraped, errors };
+}
+
 async function runFull() {
   const startedAt = new Date().toISOString();
-  let teamsScraped = 0;
   let errors = 0;
 
   logger.info('Starting full scrape run');
 
-  // Upsert leagues from config — no API call needed
-  for (const leagueConfig of ALL_LEAGUES) {
-    await upsertLeague(leagueConfig);
+  for (const league of ALL_LEAGUES) {
+    await upsertLeague(league);
   }
   logger.info(`Upserted ${ALL_LEAGUES.length} leagues`);
 
   const existingTeamIds = await getExistingTeamIds();
   logger.info(`Found ${existingTeamIds.size} existing teams in DB`);
 
+  const allTasks = [];
   for (const leagueConfig of ALL_LEAGUES) {
     let leagueData;
     try {
@@ -112,84 +206,20 @@ async function runFull() {
     logger.info(`League ${leagueConfig.name}: ${teamIds.length} teams`);
 
     for (const teamId of teamIds) {
-      let teamData;
-      try {
-        teamData = await fetchTeam(teamId);
-      } catch (err) {
-        logger.error(`Failed to fetch team ${teamId}: ${err.message}`);
-        errors++;
-        continue;
-      }
-
-      const record = teamData.Record?.['Regular Season'] ?? {};
-      const wins   = record.Wins ?? 0;
-      const losses = record.Losses ?? 0;
-
-      // Skip teams with no games played unless they're already in the DB
-      if (wins === 0 && losses === 0 && !existingTeamIds.has(teamId)) {
-        logger.info(`Skipping inactive team ${teamData.Name ?? teamId}`);
-        continue;
-      }
-
-      try {
-        await upsertTeam({
-          id:       teamId,
-          leagueId: leagueConfig.id,
-          name:     teamData.Name,
-          location: teamData.Location,
-          emoji:    teamData.Emoji,
-          color:    teamData.Color,
-          wins,
-          losses,
-        });
-
-        const allPlayers = [
-          ...(teamData.Players ?? []).map(p => ({ ...p, isBench: false })),
-          ...(Array.isArray(teamData.Bench?.Batters) ? teamData.Bench.Batters : []).map(p => ({ ...p, isBench: true })),
-          ...(Array.isArray(teamData.Bench?.Pitchers) ? teamData.Bench.Pitchers : []).map(p => ({ ...p, isBench: true })),
-        ];
-
-        const playerRows = allPlayers.map(p => ({
-          id:           p.PlayerID,
-          teamId:       teamId,
-          firstName:    p.FirstName,
-          lastName:     p.LastName,
-          suffix:       p.Suffix,
-          number:       p.Number,
-          position:     p.Position,
-          positionType: p.PositionType,
-          slot:         p.Slot,
-          level:        p.Level,
-        }));
-
-        const statsRows = allPlayers.map(p => ({
-          playerId: p.PlayerID,
-          stats:    p.Stats ?? {},
-        }));
-
-        await upsertPlayers(playerRows);
-        await upsertPlayersStats(statsRows);
-
-        // Collect player IDs for bulk detail fetch
-        const playerIds = allPlayers.map(p => p.PlayerID);
-        const playerDetails = await fetchPlayers(playerIds);
-        await processPlayerDetails(playerDetails, true);
-
-        teamsScraped++;
-        logger.info(`Scraped team ${teamData.Name} (${teamsScraped})`);
-      } catch (err) {
-        logger.error(`Failed to process team ${teamId}: ${err.message ?? JSON.stringify(err)}`);
-        errors++;
-      }
+      allTasks.push(() => processTeam(teamId, leagueConfig, existingTeamIds));
     }
   }
 
+  const CONCURRENCY = 5;
+  const { teamsScraped, errors: teamErrors } = await runWithConcurrency(allTasks, CONCURRENCY);
+  errors += teamErrors;
+
   await logScrapeRun({
     startedAt,
-    finishedAt:   new Date().toISOString(),
+    finishedAt: new Date().toISOString(),
     teamsScraped,
     errors,
-    notes:        'full',
+    notes: 'full',
   });
 
   logger.info(`Full run complete. Teams scraped: ${teamsScraped}, errors: ${errors}`);
@@ -209,7 +239,7 @@ async function runDetails() {
 
   await logScrapeRun({
     startedAt,
-    finishedAt: new Date().toISOString(),
+    finishedAt:   new Date().toISOString(),
     teamsScraped: 0,
     errors,
     notes: 'details',
