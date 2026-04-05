@@ -21,16 +21,34 @@ async function getExistingTeamIds() {
 }
 
 async function getAllPlayerIds() {
-  const { data, error } = await supabase.from('players').select('id');
-  if (error) throw error;
-  return data.map(p => p.id);
+  let allIds = [];
+  let page = 0;
+  const pageSize = 1000;
+  
+  while (true) {
+    const { data, error } = await supabase
+      .from('players')
+      .select('id')
+      .range(page * pageSize, (page + 1) * pageSize - 1);
+    
+    if (error) throw error;
+    if (data.length === 0) break;
+    
+    allIds.push(...data.map(p => p.id).filter(id => id && id !== '#'));
+    if (data.length < pageSize) break;
+    page++;
+  }
+  
+  return allIds;
 }
 
 async function processPlayerDetails(players, fullRun = false) {
   const detailRows = [];
   const attributeRows = [];
 
-  for (const player of players) {
+  for (let i = 0; i < players.length; i++) {
+    const player = players[i];
+    if (i % 500 === 0) logger.info(`Processing player ${i}/${players.length}`);
     try {
       const computed = computeAttributes(player);
       detailRows.push({
@@ -96,7 +114,7 @@ async function processTeam(teamId, leagueConfig, existingTeamIds) {
   const losses = record.Losses ?? 0;
 
   if (wins === 0 && losses === 0 && !existingTeamIds.has(teamId)) {
-    logger.info(`kipping inactive team ${teamData.Name ?? teamId}`);
+    logger.info(`skipping inactive team ${teamData.Name ?? teamId}`);
     return { success: true, skipped: true };
   }
 
@@ -126,6 +144,8 @@ async function processTeam(teamId, leagueConfig, existingTeamIds) {
       return true;
     });
 
+    logger.info(`Player IDs for ${teamData.Name}: ${allPlayers.map(p => p.PlayerID).join(',')}`);
+
     const playerRows = allPlayers.map(p => ({
       id:           p.PlayerID,
       teamId:       teamId,
@@ -151,7 +171,7 @@ async function processTeam(teamId, leagueConfig, existingTeamIds) {
     const playerDetails = await fetchPlayers(playerIds);
     await processPlayerDetails(playerDetails, true);
 
-    logger.info(`Scraped team ${teamData.Name}`);
+    logger.info(`Scraped team ${teamData.location} ${teamData.Name}`);
     return { success: true };
   } catch (err) {
     logger.error(`Failed to process team ${teamId}: ${err.message ?? JSON.stringify(err)}`);
@@ -203,14 +223,14 @@ async function runFull() {
     }
 
     const teamIds = leagueData.Teams ?? [];
-    logger.info(`League ${leagueConfig.name}: ${teamIds.length} teams`);
+    logger.info(`==== League ${leagueConfig.name}: ${teamIds.length} teams ====`);
 
     for (const teamId of teamIds) {
       allTasks.push(() => processTeam(teamId, leagueConfig, existingTeamIds));
     }
   }
 
-  const CONCURRENCY = 5;
+  const CONCURRENCY = 6;
   const { teamsScraped, errors: teamErrors } = await runWithConcurrency(allTasks, CONCURRENCY);
   errors += teamErrors;
 
@@ -234,7 +254,7 @@ async function runDetails() {
   const playerIds = await getAllPlayerIds();
   logger.info(`Fetching details for ${playerIds.length} players`);
 
-  const players = await fetchPlayers(playerIds);
+  const players = await fetchPlayers(playerIds, true);
   await processPlayerDetails(players, false);
 
   await logScrapeRun({
@@ -248,10 +268,48 @@ async function runDetails() {
   logger.info(`Details run complete. Players updated: ${players.length}, errors: ${errors}`);
 }
 
+async function runTeam(teamId) {
+  logger.info(`Running single team scrape for ${teamId}`);
+  
+  const existingTeamIds = await getExistingTeamIds();
+  
+  // Find which league this team belongs to by checking all leagues
+  let leagueConfig = null;
+  for (const league of ALL_LEAGUES) {
+    let leagueData;
+    try {
+      leagueData = await fetchLeague(league.id);
+    } catch (err) {
+      logger.error(`${err}`)
+      continue;
+    }
+    if (leagueData.Teams?.includes(teamId)) {
+      leagueConfig = league;
+      break;
+    }
+  }
+
+  if (!leagueConfig) {
+    logger.error(`Could not find league for team ${teamId}`);
+    process.exit(1);
+  }
+
+  logger.info(`Found team in league ${leagueConfig.name}`);
+  const result = await processTeam(teamId, leagueConfig, existingTeamIds);
+  logger.info(`Done. Success: ${result.success}`);
+}
+
 if (mode === '--full') {
   await runFull();
 } else if (mode === '--details') {
   await runDetails();
+} else if (mode === '--team') {
+  const teamId = process.argv[3];
+  if (!teamId) {
+    logger.error('Usage: node index.js --team <teamId>');
+    process.exit(1);
+  }
+  await runTeam(teamId);
 } else {
   logger.error(`Unknown mode: ${mode}. Use --full or --details`);
   process.exit(1);

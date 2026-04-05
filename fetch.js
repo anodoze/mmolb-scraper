@@ -1,4 +1,5 @@
 import { API_BASE } from './config.js';
+import { logger } from './logger.js';
 
 async function apiFetch(path) {
   const res = await fetch(`${API_BASE}/${path}`);
@@ -14,7 +15,7 @@ export async function fetchTeam(teamId) {
   return apiFetch(`team/${teamId}`);
 }
 
-export async function fetchPlayers(playerIds) {
+export async function fetchPlayers(playerIds, logProgress = false) {
   // API accepts up to 100 IDs at a time
   const chunks = [];
   for (let i = 0; i < playerIds.length; i += 100) {
@@ -22,9 +23,12 @@ export async function fetchPlayers(playerIds) {
   }
 
   const results = [];
-  for (const chunk of chunks) {
-    const data = await apiFetch(`players?ids=${chunk.join(',')}`);
+  for (let i = 0; i < chunks.length; i++) {
+    const data = await apiFetch(`players?ids=${chunks[i].join(',')}`);
     results.push(...data.players);
+    if (logProgress) {
+      logger.info(`Fetched chunk ${i + 1}/${chunks.length} (${results.length} players so far)`);
+    }
   }
   return results;
 }

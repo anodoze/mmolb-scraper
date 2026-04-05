@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { logger } from './logger.js';
 import 'dotenv/config';
 
 const supabase = createClient(
@@ -302,14 +303,20 @@ export async function upsertPlayersAttributes(playerAttributes) {
 }
 
 export async function upsertPlayersDetails(playerDetails) {
-  const { error } = await supabase
-    .from('player_details')
-    .upsert(playerDetails.map(({ playerId, details }) => ({
-      player_id:    playerId,
-      details,
-      last_updated: new Date().toISOString(),
-    })), { onConflict: 'player_id' });
-  if (error) throw error;
+  const chunkSize = 100;
+  for (let i = 0; i < playerDetails.length; i += chunkSize) {
+    const chunk = playerDetails.slice(i, i + chunkSize);
+    logger.info(`Upserting details chunk ${i}-${i + chunk.length}`);
+    const { error } = await supabase
+      .from('player_details')
+      .upsert(chunk.map(({ playerId, details }) => ({
+        player_id:    playerId,
+        details,
+        last_updated: new Date().toISOString(),
+      })), { onConflict: 'player_id' });
+    if (error) throw error;
+    await new Promise(r => setTimeout(r, 100));
+  }
 }
 
 export async function logScrapeRun(run) {
