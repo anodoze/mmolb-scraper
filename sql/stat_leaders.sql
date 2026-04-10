@@ -545,11 +545,11 @@ SELECT player_id, first_name, last_name, suffix, position, team_name, team_locat
 UNION ALL
 SELECT player_id, first_name, last_name, suffix, position, team_name, team_location, team_id, team_emoji,
        league_id, league_name, league_type, innings_pitched, ip_threshold,
-       whip, 'Walks and Hits per Innings Pitched (WHIP)', rn_whip FROM rate_ranked WHERE rn_whip <= 10
+       whip, 'Walks and Hits per Inning Pitched (WHIP)', rn_whip FROM rate_ranked WHERE rn_whip <= 10
 UNION ALL
 SELECT player_id, first_name, last_name, suffix, position, team_name, team_location, team_id, team_emoji,
        league_id, league_name, league_type, innings_pitched, ip_threshold,
-       k9, 'Strikes per 9 Innings (K/9)', rn_k9 FROM rate_ranked WHERE rn_k9 <= 10
+       k9, 'Strikeouts per 9 Innings (K/9)', rn_k9 FROM rate_ranked WHERE rn_k9 <= 10
 UNION ALL
 SELECT player_id, first_name, last_name, suffix, position, team_name, team_location, team_id, team_emoji,
        league_id, league_name, league_type, innings_pitched, ip_threshold,
@@ -591,13 +591,13 @@ SELECT player_id, first_name, last_name, suffix, position, team_name, team_locat
        CASE WHEN league_type = 'Lesser' THEN '__lesser__' ELSE '__greater__' END,
        CASE WHEN league_type = 'Lesser' THEN 'All Lesser' ELSE 'All Greater' END,
        league_type, innings_pitched, ip_threshold,
-       whip, 'Walks and Hits per Innings Pitched (WHIP)', rn_whip FROM combined_rate_ranked WHERE rn_whip <= 10
+       whip, 'Walks and Hits per Inning Pitched (WHIP)', rn_whip FROM combined_rate_ranked WHERE rn_whip <= 10
 UNION ALL
 SELECT player_id, first_name, last_name, suffix, position, team_name, team_location, team_id, team_emoji,
        CASE WHEN league_type = 'Lesser' THEN '__lesser__' ELSE '__greater__' END,
        CASE WHEN league_type = 'Lesser' THEN 'All Lesser' ELSE 'All Greater' END,
        league_type, innings_pitched, ip_threshold,
-       k9, 'Strikes per 9 Innings (K/9)', rn_k9 FROM combined_rate_ranked WHERE rn_k9 <= 10
+       k9, 'Strikeouts per 9 Innings (K/9)', rn_k9 FROM combined_rate_ranked WHERE rn_k9 <= 10
 UNION ALL
 SELECT player_id, first_name, last_name, suffix, position, team_name, team_location, team_id, team_emoji,
        CASE WHEN league_type = 'Lesser' THEN '__lesser__' ELSE '__greater__' END,

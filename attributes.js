@@ -117,7 +117,7 @@ const ALL_ATTRIBUTES = [
   'Aiming','Contact','Cunning','Determination','Discipline',
   'Insight','Intimidation','Lift','Muscle','Selflessness','Vision','Wisdom',
   'Greed','Performance','Speed','Stealth',
-  'Acrobatics','Agility','Arm','Awareness','Composure','Dexterity','Patience','Reaction',
+  'Acrobatics','Agility','Arm','Awareness','Composure','Dexterity','Patience','Reaction', 'Luck',
   'Accuracy','Control','Defiance','Deception','Guts',
   'Intuition','Persuasion','Presence','Rotation','Stamina','Stuff','Velocity',
 ];
