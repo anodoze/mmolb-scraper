@@ -26,6 +26,4 @@ export const GREATER_LEAGUES = [
 
 export const ALL_LEAGUES = [...LESSER_LEAGUES, ...GREATER_LEAGUES];
 
-// Minimum games played to consider a team active
-// wins + losses > 0
 export const MIN_GAMES_PLAYED = 1;

@@ -1,11 +1,11 @@
-import { createClient } from '@supabase/supabase-js';
-import { logger } from './logger.js';
-import 'dotenv/config';
+import { createClient } from '@supabase/supabase-js'
+import { logger } from './logger.js'
+import 'dotenv/config'
 
-const supabase = createClient(
+export const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
-);
+)
 
 export async function upsertLeague(league) {
   const { error } = await supabase

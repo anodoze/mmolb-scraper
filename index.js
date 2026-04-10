@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { ALL_LEAGUES } from './config.js';
-import { fetchLeague, fetchTeam, fetchPlayers } from './fetch.js';
+import { fetchLeague, fetchTeam, fetchPlayers, fetchBulkTeamRecords, refreshLeaderboards } from './fetch.js';
 import { upsertLeague, upsertTeam, upsertPlayers, upsertPlayersStats,
          upsertPlayersAttributes, upsertPlayersDetails, logScrapeRun } from './db.js';
 import { computeAttributes, attributeTotals } from './attributes.js';
@@ -48,7 +48,7 @@ async function processPlayerDetails(players, fullRun = false) {
 
   for (let i = 0; i < players.length; i++) {
     const player = players[i];
-    if (i % 500 === 0) logger.info(`Processing player ${i}/${players.length}`);
+    if (i % 500 === 0) logger.info(`Processing ${players.length} players`);
     try {
       const computed = computeAttributes(player);
       detailRows.push({
@@ -144,7 +144,7 @@ async function processTeam(teamId, leagueConfig, existingTeamIds) {
       return true;
     });
 
-    logger.info(`Player IDs for ${teamData.Name}: ${allPlayers.map(p => p.PlayerID).join(',')}`);
+    // logger.info(`Player IDs for ${teamData.Name}: ${allPlayers.map(p => p.PlayerID).join(',')}`);
 
     const playerRows = allPlayers.map(p => ({
       id:           p.PlayerID,
@@ -171,7 +171,7 @@ async function processTeam(teamId, leagueConfig, existingTeamIds) {
     const playerDetails = await fetchPlayers(playerIds);
     await processPlayerDetails(playerDetails, true);
 
-    logger.info(`Scraped team ${teamData.location} ${teamData.Name}`);
+    logger.info(`Scraped team ${teamData.Location} ${teamData.Name}`);
     return { success: true };
   } catch (err) {
     logger.error(`Failed to process team ${teamId}: ${err.message ?? JSON.stringify(err)}`);
@@ -211,7 +211,8 @@ async function runFull() {
   const existingTeamIds = await getExistingTeamIds();
   logger.info(`Found ${existingTeamIds.size} existing teams in DB`);
 
-  const allTasks = [];
+  // collect all team IDs across all leagues first
+  const leagueTeams = []; // [{ leagueConfig, teamId }]
   for (const leagueConfig of ALL_LEAGUES) {
     let leagueData;
     try {
@@ -221,18 +222,38 @@ async function runFull() {
       errors++;
       continue;
     }
-
     const teamIds = leagueData.Teams ?? [];
     logger.info(`==== League ${leagueConfig.name}: ${teamIds.length} teams ====`);
-
     for (const teamId of teamIds) {
-      allTasks.push(() => processTeam(teamId, leagueConfig, existingTeamIds));
+      leagueTeams.push({ leagueConfig, teamId });
     }
   }
+
+  // bulk fetch records and filter inactive teams
+  const allTeamIds = leagueTeams.map(t => t.teamId);
+  const bulkRecords = await fetchBulkTeamRecords(allTeamIds);
+
+  const allTasks = [];
+  let inactiveCount = 0;
+    
+  for (const { leagueConfig, teamId } of leagueTeams) {
+    const record = bulkRecords.get(teamId);
+    if (!record) continue;
+    if (record.wins === 0 && record.losses === 0 && !existingTeamIds.has(teamId)) {
+      inactiveCount ++;
+      continue;
+    }
+    allTasks.push(() => processTeam(teamId, leagueConfig, existingTeamIds));
+  }
+  
+  logger.info(`Skipping ${inactiveCount} inactive teams.`);
+  logger.info(`Scraping ${allTasks.length} active teams`);
 
   const CONCURRENCY = 6;
   const { teamsScraped, errors: teamErrors } = await runWithConcurrency(allTasks, CONCURRENCY);
   errors += teamErrors;
+
+  await refreshLeaderboards();
 
   await logScrapeRun({
     startedAt,
@@ -242,7 +263,8 @@ async function runFull() {
     notes: 'full',
   });
 
-  logger.info(`Full run complete. Teams scraped: ${teamsScraped}, errors: ${errors}`);
+  const duration = ((new Date() - new Date(startedAt)) / 1000 / 60).toFixed(1);
+  logger.info(`Full run complete in ${duration} minutes. Teams scraped: ${teamsScraped}, errors: ${errors}`);
 }
 
 async function runDetails() {
