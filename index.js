@@ -249,7 +249,7 @@ async function runFull() {
   logger.info(`Skipping ${inactiveCount} inactive teams.`);
   logger.info(`Scraping ${allTasks.length} active teams`);
 
-  const CONCURRENCY = 6;
+  const CONCURRENCY = 3;
   const { teamsScraped, errors: teamErrors } = await runWithConcurrency(allTasks, CONCURRENCY);
   errors += teamErrors;
 
