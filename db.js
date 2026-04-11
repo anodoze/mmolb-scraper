@@ -306,7 +306,7 @@ export async function upsertPlayersDetails(playerDetails) {
   const chunkSize = 100;
   for (let i = 0; i < playerDetails.length; i += chunkSize) {
     const chunk = playerDetails.slice(i, i + chunkSize);
-    logger.info(`Upserting details chunk ${i}-${i + chunk.length}`);
+    logger.info(`Upserting details for ${chunk.length} players`);
     const { error } = await supabase
       .from('player_details')
       .upsert(chunk.map(({ playerId, details }) => ({

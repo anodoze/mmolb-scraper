@@ -114,7 +114,7 @@ async function processTeam(teamId, leagueConfig, existingTeamIds) {
   const losses = record.Losses ?? 0;
 
   if (wins === 0 && losses === 0 && !existingTeamIds.has(teamId)) {
-    logger.info(`skipping inactive team ${teamData.Name ?? teamId}`);
+    // logger.info(`skipping inactive team ${teamData.Name ?? teamId}`);
     return { success: true, skipped: true };
   }
 
