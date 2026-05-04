@@ -1,0 +1,1 @@
+TRUNCATE TABLE player_details, player_stats, player_attributes, players, teams, leagues CASCADE;

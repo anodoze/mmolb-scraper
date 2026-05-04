@@ -273,19 +273,19 @@ async function runDetails() {
 
   logger.info('Starting details scrape run');
 
-  const playerIds = await getAllPlayerIds();
-  logger.info(`Fetching details for ${playerIds.length} players`);
+  // const playerIds = await getAllPlayerIds();
+  // logger.info(`Fetching details for ${playerIds.length} players`);
 
-  const players = await fetchPlayers(playerIds, true);
-  await processPlayerDetails(players, false);
+  // const players = await fetchPlayers(playerIds, true);
+  // await processPlayerDetails(players, false);
 
-  await logScrapeRun({
-    startedAt,
-    finishedAt:   new Date().toISOString(),
-    teamsScraped: 0,
-    errors,
-    notes: 'details',
-  });
+  // await logScrapeRun({
+  //   startedAt,
+  //   finishedAt:   new Date().toISOString(),
+  //   teamsScraped: 0,
+  //   errors,
+  //   notes: 'details',
+  // });
 
   logger.info(`Details run complete. Players updated: ${players.length}, errors: ${errors}`);
 }

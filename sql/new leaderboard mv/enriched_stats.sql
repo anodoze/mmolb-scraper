@@ -16,7 +16,7 @@ SELECT
   -- pitching rate
   ps.innings_pitched, ps.era, ps.whip, ps.k9, ps.bb9, ps.h9, ps.hr9,
   -- pitching counting
-  ps.strikeouts, ps.hit_batters, ps.wins, ps.quality_starts,
+  ps.strikeouts, ps.hit_batters, ps.wins, ps.quality_starts, ps.saves,
   -- for fip calculation (done in pitching leaderboard)
   ps.home_runs_allowed, ps.walks,
   lpc.fip_constant
