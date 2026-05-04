@@ -43,7 +43,7 @@ async function getAllPlayerIds() {
 }
 
 async function processPlayerDetails(players, fullRun = false) {
-  const detailRows = [];
+  // const detailRows = [];
   const attributeRows = [];
 
   for (let i = 0; i < players.length; i++) {
@@ -51,37 +51,37 @@ async function processPlayerDetails(players, fullRun = false) {
     if (i % 500 === 0) logger.info(`Processing ${players.length} players`);
     try {
       const computed = computeAttributes(player);
-      detailRows.push({
-        playerId: player._id,
-        details: {
-          firstName:            player.FirstName,
-          lastName:             player.LastName,
-          suffix:               player.Suffix,
-          number:               player.Number,
-          position:             player.Position,
-          positionType:         player.PositionType,
-          level:                player.Level,
-          likes:                player.Likes,
-          dislikes:             player.Dislikes,
-          home:                 player.Home,
-          bats:                 player.Bats,
-          throws:               player.Throws,
-          priority:             player.Priority,
-          lesserBoon:           player.LesserBoon,
-          foodBuffs:            player.FoodBuffs,
-          equipment:            player.Equipment,
-          augmentHistory:       player.AugmentHistory,
-          baseAttributeBonuses: player.BaseAttributeBonuses,
-          appliedLevelUps:      player.AppliedLevelUps,
-          pendingLevelUps:      player.PendingLevelUps,
-          scheduledLevelUps:    player.ScheduledLevelUps,
-          pitchTypes:           player.PitchTypes,
-          pitchSelection:       player.PitchSelection,
-          seasonStats:          player.SeasonStats,
-          modifications:        player.Modifications,
-          attributeBreakdown:   computed,
-        },
-      });
+      // detailRows.push({
+      //   playerId: player._id,
+      //   details: {
+      //     firstName:            player.FirstName,
+      //     lastName:             player.LastName,
+      //     suffix:               player.Suffix,
+      //     number:               player.Number,
+      //     position:             player.Position,
+      //     positionType:         player.PositionType,
+      //     level:                player.Level,
+      //     likes:                player.Likes,
+      //     dislikes:             player.Dislikes,
+      //     home:                 player.Home,
+      //     bats:                 player.Bats,
+      //     throws:               player.Throws,
+      //     priority:             player.Priority,
+      //     lesserBoon:           player.LesserBoon,
+      //     foodBuffs:            player.FoodBuffs,
+      //     equipment:            player.Equipment,
+      //     augmentHistory:       player.AugmentHistory,
+      //     baseAttributeBonuses: player.BaseAttributeBonuses,
+      //     appliedLevelUps:      player.AppliedLevelUps,
+      //     pendingLevelUps:      player.PendingLevelUps,
+      //     scheduledLevelUps:    player.ScheduledLevelUps,
+      //     pitchTypes:           player.PitchTypes,
+      //     pitchSelection:       player.PitchSelection,
+      //     seasonStats:          player.SeasonStats,
+      //     modifications:        player.Modifications,
+      //     attributeBreakdown:   computed,
+      //   },
+      // });
 
       if (fullRun) {
         attributeRows.push({
@@ -94,7 +94,7 @@ async function processPlayerDetails(players, fullRun = false) {
     }
   }
 
-  await upsertPlayersDetails(detailRows);
+  // await upsertPlayersDetails(detailRows);
   if (fullRun && attributeRows.length > 0) {
     await upsertPlayersAttributes(attributeRows);
   }
@@ -167,9 +167,9 @@ async function processTeam(teamId, leagueConfig, existingTeamIds) {
     await upsertPlayers(playerRows);
     await upsertPlayersStats(statsRows);
 
-    // const playerIds = allPlayers.map(p => p.PlayerID);
-    // const playerDetails = await fetchPlayers(playerIds);
-    // await processPlayerDetails(playerDetails, true);
+    const playerIds = allPlayers.map(p => p.PlayerID);
+    const playerDetails = await fetchPlayers(playerIds);
+    await processPlayerDetails(playerDetails, true);
 
     logger.info(`Scraped team ${teamData.Location} ${teamData.Name}`);
     return { success: true };
@@ -273,19 +273,19 @@ async function runDetails() {
 
   logger.info('Starting details scrape run');
 
-  // const playerIds = await getAllPlayerIds();
-  // logger.info(`Fetching details for ${playerIds.length} players`);
+  const playerIds = await getAllPlayerIds();
+  logger.info(`Fetching details for ${playerIds.length} players`);
 
-  // const players = await fetchPlayers(playerIds, true);
-  // await processPlayerDetails(players, false);
+  const players = await fetchPlayers(playerIds, true);
+  await processPlayerDetails(players, false);
 
-  // await logScrapeRun({
-  //   startedAt,
-  //   finishedAt:   new Date().toISOString(),
-  //   teamsScraped: 0,
-  //   errors,
-  //   notes: 'details',
-  // });
+  await logScrapeRun({
+    startedAt,
+    finishedAt:   new Date().toISOString(),
+    teamsScraped: 0,
+    errors,
+    notes: 'details',
+  });
 
   logger.info(`Details run complete. Players updated: ${players.length}, errors: ${errors}`);
 }

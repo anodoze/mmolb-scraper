@@ -54,6 +54,7 @@ export async function fetchBulkTeamRecords(teamIds) {
 
 export async function refreshLeaderboards() {
   const views = [
+    'mv_enriched_stats',
     'mv_games_played',
     'mv_league_pitching_context',
     'mv_league_batting_context',
