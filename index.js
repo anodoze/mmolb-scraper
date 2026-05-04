@@ -167,9 +167,9 @@ async function processTeam(teamId, leagueConfig, existingTeamIds) {
     await upsertPlayers(playerRows);
     await upsertPlayersStats(statsRows);
 
-    const playerIds = allPlayers.map(p => p.PlayerID);
-    const playerDetails = await fetchPlayers(playerIds);
-    await processPlayerDetails(playerDetails, true);
+    // const playerIds = allPlayers.map(p => p.PlayerID);
+    // const playerDetails = await fetchPlayers(playerIds);
+    // await processPlayerDetails(playerDetails, true);
 
     logger.info(`Scraped team ${teamData.Location} ${teamData.Name}`);
     return { success: true };
